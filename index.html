@@ -7,17 +7,58 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body { margin:0; }
+body { margin:0; font-family: Arial, sans-serif; }
 #map { height:100vh; }
+
 .panel {
   position:absolute;
   top:10px;
   left:10px;
   z-index:1000;
   background:white;
-  padding:10px;
-  border-radius:6px;
-  box-shadow:0 2px 6px rgba(0,0,0,0.3);
+  padding:12px;
+  border-radius:8px;
+  box-shadow:0 3px 8px rgba(0,0,0,0.3);
+  width:260px;
+}
+
+.panel h3 {
+  margin:0 0 8px 0;
+  font-size:16px;
+}
+
+.panel label {
+  font-size:13px;
+  font-weight:bold;
+}
+
+.panel input, .panel select {
+  width:100%;
+  margin-bottom:8px;
+  padding:6px;
+  font-size:13px;
+}
+
+.popup-box {
+  font-size:13px;
+}
+
+.popup-box b {
+  font-size:14px;
+}
+
+.popup-box a {
+  display:inline-block;
+  margin-top:6px;
+  padding:6px 10px;
+  background:#1e88e5;
+  color:white;
+  text-decoration:none;
+  border-radius:4px;
+  font-size:12px;
+}
+.popup-box a:hover {
+  background:#1565c0;
 }
 </style>
 </head>
@@ -25,10 +66,23 @@ body { margin:0; }
 <body>
 
 <div class="panel">
-<b>Peta SPKLU Kalimantan Barat</b><br><br>
-<select id="filterKota">
-  <option value="all">Semua Kota / Kabupaten</option>
-</select>
+  <h3>Peta SPKLU Kalbar</h3>
+
+  <label>Cari Nama SPKLU</label>
+  <input type="text" id="searchNama" placeholder="Nama SPKLU">
+
+  <label>Kabupaten / Kota</label>
+  <select id="filterKota">
+    <option value="all">Semua</option>
+  </select>
+
+  <label>Tipe Charging</label>
+  <select id="filterType">
+    <option value="all">Semua</option>
+    <option value="FAST CHARGING">Fast Charging</option>
+    <option value="MEDIUM CHARGING">Medium Charging</option>
+    <option value="ULTRA FAST CHARGING">Ultra Fast Charging</option>
+  </select>
 </div>
 
 <div id="map"></div>
@@ -50,21 +104,20 @@ const icons = {
 };
 
 let markers = [];
-let kotaSet = new Set();
+let allData = [];
 
 // LOAD CSV (delimiter ;)
 fetch('spklu_kalbar.csv')
 .then(res => res.text())
 .then(text => {
-
   const rows = text.trim().split('\n').slice(1);
+  const kotaSet = new Set();
 
   rows.forEach(row => {
     if(!row) return;
-
     const col = row.split(';');
 
-    const data = {
+    const d = {
       nama   : col[0],
       alamat : col[1],
       lat    : parseFloat(col[2]),
@@ -74,50 +127,65 @@ fetch('spklu_kalbar.csv')
       kw     : col[7]
     };
 
-    if (isNaN(data.lat) || isNaN(data.lon)) return;
+    if(isNaN(d.lat) || isNaN(d.lon)) return;
 
-    addMarker(data);
-    kotaSet.add(data.kota);
+    allData.push(d);
+    kotaSet.add(d.kota);
+
+    const marker = L.marker([d.lat, d.lon], {
+      icon: icons[d.type] || icons["FAST CHARGING"]
+    })
+    .bindPopup(`
+      <div class="popup-box">
+        <b>${d.nama}</b><br>
+        ${d.alamat}<br>
+        <b>${d.kota}</b><br>
+        ${d.type} (${d.kw} kW)<br>
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${d.lat},${d.lon}" 
+           target="_blank">📍 Petunjuk Arah</a>
+      </div>
+    `)
+    .addTo(map);
+
+    marker.data = d;
+    markers.push(marker);
   });
 
-  // isi dropdown filter
-  const select = document.getElementById('filterKota');
+  // isi dropdown kota
+  const filterKota = document.getElementById('filterKota');
   [...kotaSet].sort().forEach(kota=>{
     const opt = document.createElement('option');
     opt.value = kota;
     opt.textContent = kota;
-    select.appendChild(opt);
+    filterKota.appendChild(opt);
   });
 });
 
-// MARKER
-function addMarker(d){
-  const marker = L.marker([d.lat, d.lon], {
-    icon: icons[d.type] || icons["FAST CHARGING"]
-  })
-  .bindPopup(`
-    <b>${d.nama}</b><br>
-    ${d.alamat}<br>
-    ${d.kota}<br>
-    <b>${d.type}</b><br>
-    Daya: ${d.kw} kW
-  `)
-  .addTo(map);
+// FILTER FUNCTION
+function applyFilter(){
+  const keyword = document.getElementById('searchNama').value.toLowerCase();
+  const kota = document.getElementById('filterKota').value;
+  const type = document.getElementById('filterType').value;
 
-  marker.kota = d.kota;
-  markers.push(marker);
-}
-
-// FILTER
-document.getElementById('filterKota').addEventListener('change', e=>{
   markers.forEach(m=>{
-    if(e.target.value === 'all' || m.kota === e.target.value){
+    const d = m.data;
+
+    const matchNama = d.nama.toLowerCase().includes(keyword);
+    const matchKota = (kota === 'all' || d.kota === kota);
+    const matchType = (type === 'all' || d.type === type);
+
+    if(matchNama && matchKota && matchType){
       map.addLayer(m);
     } else {
       map.removeLayer(m);
     }
   });
-});
+}
+
+// EVENT LISTENER
+document.getElementById('searchNama').addEventListener('input', applyFilter);
+document.getElementById('filterKota').addEventListener('change', applyFilter);
+document.getElementById('filterType').addEventListener('change', applyFilter);
 </script>
 
 </body>
