@@ -1,181 +1,120 @@
 <!DOCTYPE html>
-<html lang="id">
+<html>
 <head>
-<meta charset="UTF-8">
+<meta charset="utf-8">
 <title>Peta Sebaran SPKLU Kalimantan Barat</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
-<script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
 
 <style>
-body { margin:0; font-family:Arial }
-#map { height:100vh; width:100vw }
-
-#sidebar {
+body { margin:0; }
+#map { height:100vh; }
+.panel {
   position:absolute;
   top:10px;
   left:10px;
-  width:270px;
-  background:white;
-  padding:12px;
   z-index:1000;
-  box-shadow:0 0 10px rgba(0,0,0,0.25);
+  background:white;
+  padding:10px;
   border-radius:6px;
-}
-
-#sidebar h2 {
-  font-size:16px;
-  margin:0 0 10px 0;
-}
-
-#sidebar label {
-  font-size:13px;
- affiliated;
-  margin-top:10px;
-  display:block;
-}
-
-#sidebar select {
-  width:100%;
-  padding:5px;
-  margin-top:4px;
 }
 </style>
 </head>
 
 <body>
 
-<!-- SIDEBAR -->
-<div id="sidebar">
-  <h2>📍 Peta Sebaran SPKLU<br>Kalimantan Barat</h2>
-
-  <label>Kabupaten / Kota</label>
-  <select id="filterKota">
-    <option value="">Semua</option>
-  </select>
-
-  <label>Tipe Charging</label>
-  <select id="filterType">
-    <option value="">Semua</option>
-    <option value="ULTRA FAST CHARGING">Ultra Fast</option>
-    <option value="FAST CHARGING">Fast</option>
-    <option value="MEDIUM CHARGING">Medium</option>
-  </select>
+<div class="panel">
+<b>Peta SPKLU Kalimantan Barat</b><br><br>
+<select id="filterKota">
+  <option value="all">Semua Kota</option>
+</select>
 </div>
 
 <div id="map"></div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-/* ===================== BASE MAP ===================== */
-const map = L.map('map').setView([-0.5, 110.2], 7);
+const map = L.map('map').setView([0.1, 109.5], 7);
 
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  attribution:'&copy; OpenStreetMap'
+  attribution: '© OpenStreetMap'
 }).addTo(map);
 
-/* ===================== BATAS ADMIN KALBAR ===================== */
-/* Sumber: GADM Indonesia level provinsi */
-fetch("https://raw.githubusercontent.com/rezapace/geojson-indonesia/master/provinsi/kalimantan_barat.geojson")
-.then(res => res.json())
-.then(data => {
-  L.geoJSON(data, {
-    style:{
-      color:"#6a1b9a",
-      weight:2,
-      fill:false
-    }
-  }).addTo(map);
-});
+// ICON
+const icons = {
+  "FAST CHARGING": L.icon({ iconUrl:'icons/fast.png', iconSize:[30,30] }),
+  "MEDIUM CHARGING": L.icon({ iconUrl:'icons/medium.png', iconSize:[30,30] }),
+  "ULTRA FAST CHARGING": L.icon({ iconUrl:'icons/ultra.png', iconSize:[30,30] })
+};
 
-/* ===================== ICON BY TYPE ===================== */
-function iconByType(type){
-  let color = "blue";
-  if(type==="ULTRA FAST CHARGING") color="red";
-  else if(type==="FAST CHARGING") color="blue";
-  else if(type==="MEDIUM CHARGING") color="green";
-
-  return L.divIcon({
-    className:'',
-    html:`<div style="
-      background:${color};
-      width:14px;
-      height:14px;
-      border-radius:50%;
-      border:2px solid white;"></div>`,
-    iconSize:[14,14],
-    iconAnchor:[7,7]
-  });
-}
-
-/* ===================== LOAD CSV ===================== */
 let markers = [];
+let allData = [];
 
-Papa.parse("spklu_kalbar.csv",{
-  download:true,
-  header:true,
-  complete:function(results){
+// LOAD CSV
+fetch('spklu_kalbar.csv')
+.then(res => res.text())
+.then(text => {
+  const rows = text.split('\n').slice(1);
 
-    results.data.forEach(d=>{
-      if(!d.Latitude || !d.Longitude) return;
+  rows.forEach(row => {
+    if(!row) return;
+    const col = row.split(',');
 
-      const m = L.marker(
-        [parseFloat(d.Latitude), parseFloat(d.Longitude)],
-        {icon:iconByType(d["TYPE CHARGE"])}
-      );
+    const data = {
+      nama: col[0],
+      alamat: col[1],
+      lat: parseFloat(col[2]),
+      lon: parseFloat(col[3]),
+      kota: col[4],
+      type: col[5],
+      kw: col[6]
+    };
 
-      m.data = d;
+    if(isNaN(data.lat) || isNaN(data.lon)) return;
 
-      m.bindPopup(`
-        <b>${d["Nama Stasiun"]}</b><br>
-        ${d.Alamat}<br><br>
-
-        📍 ${d.Kota}, ${d.Provinsi}<br>
-        ⚡ <b>${d["TYPE CHARGE"]}</b><br>
-        🔋 ${d.KW} kW<br><br>
-
-        <a href="https://www.google.com/maps/dir/?api=1&destination=${d.Latitude},${d.Longitude}"
-           target="_blank"
-           style="display:block;
-                  text-align:center;
-                  background:#1a73e8;
-                  color:white;
-                  padding:6px;
-                  border-radius:4px;
-                  text-decoration:none">
-          Petunjuk Arah
-        </a>
-      `);
-
-      m.addTo(map);
-      markers.push(m);
-
-      /* isi dropdown kota */
-      const kotaSel = document.getElementById("filterKota");
-      if(![...kotaSel.options].some(o=>o.value===d.Kota)){
-        kotaSel.innerHTML += `<option value="${d.Kota}">${d.Kota}</option>`;
-      }
-    });
-  }
+    allData.push(data);
+    addMarker(data);
+    addFilterOption(data.kota);
+  });
 });
 
-/* ===================== FILTER FUNCTION ===================== */
-function applyFilter(){
-  const kota = filterKota.value;
-  const type = filterType.value;
+// MARKER
+function addMarker(d){
+  const marker = L.marker([d.lat, d.lon], {
+    icon: icons[d.type] || icons["FAST CHARGING"]
+  })
+  .bindPopup(`
+    <b>${d.nama}</b><br>
+    ${d.alamat}<br>
+    ${d.type} (${d.kw} kW)
+  `)
+  .addTo(map);
 
-  markers.forEach(m=>{
-    const d = m.data;
-    const show =
-      (kota==="" || d.Kota===kota) &&
-      (type==="" || d["TYPE CHARGE"]===type);
-
-    show ? m.addTo(map) : map.removeLayer(m);
-  });
+  marker.kota = d.kota;
+  markers.push(marker);
 }
 
-filterKota.onchange = applyFilter;
-filterType.onchange = applyFilter;
+// FILTER
+function addFilterOption(kota){
+  const select = document.getElementById('filterKota');
+  if (![...select.options].some(o => o.value === kota)) {
+    const opt = document.createElement('option');
+    opt.value = kota;
+    opt.textContent = kota;
+    select.appendChild(opt);
+  }
+}
+
+document.getElementById('filterKota').addEventListener('change', e=>{
+  markers.forEach(m=>{
+    if(e.target.value === 'all' || m.kota === e.target.value){
+      map.addLayer(m);
+    } else {
+      map.removeLayer(m);
+    }
+  });
+});
 </script>
 
 </body>
