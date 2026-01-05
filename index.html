@@ -12,19 +12,22 @@ body { margin:0; font-family: Arial, sans-serif; }
 
 .panel {
   position:absolute;
-  top:10px;
-  left:10px;
+  top:20px;
+  left:20px;
   z-index:1000;
   background:white;
-  padding:12px;
-  border-radius:8px;
-  box-shadow:0 3px 8px rgba(0,0,0,0.3);
-  width:260px;
+  padding:14px;
+  border-radius:10px;
+  box-shadow:0 4px 10px rgba(0,0,0,0.25);
+  width:320px;
+  max-height:90vh;
+  overflow:hidden;
 }
 
 .panel h3 {
-  margin:0 0 8px 0;
-  font-size:16px;
+  margin:0 0 10px 0;
+  font-size:17px;
+  text-align:center;
 }
 
 .panel label {
@@ -35,8 +38,38 @@ body { margin:0; font-family: Arial, sans-serif; }
 .panel input, .panel select {
   width:100%;
   margin-bottom:8px;
-  padding:6px;
+  padding:7px;
   font-size:13px;
+  border-radius:4px;
+  border:1px solid #ccc;
+}
+
+.divider {
+  border-top:1px solid #ddd;
+  margin:10px 0;
+}
+
+.list {
+  max-height:220px;
+  overflow-y:auto;
+  border:1px solid #ddd;
+  border-radius:6px;
+}
+
+.list-item {
+  padding:8px;
+  font-size:13px;
+  border-bottom:1px solid #eee;
+  cursor:pointer;
+}
+
+.list-item:hover {
+  background:#f1f6ff;
+}
+
+.list-item b {
+  display:block;
+  font-size:14px;
 }
 
 .popup-box {
@@ -83,6 +116,11 @@ body { margin:0; font-family: Arial, sans-serif; }
     <option value="MEDIUM CHARGING">Medium Charging</option>
     <option value="ULTRA FAST CHARGING">Ultra Fast Charging</option>
   </select>
+
+  <div class="divider"></div>
+
+  <b>Daftar SPKLU</b>
+  <div class="list" id="spkluList"></div>
 </div>
 
 <div id="map"></div>
@@ -106,7 +144,7 @@ const icons = {
 let markers = [];
 let allData = [];
 
-// LOAD CSV (delimiter ;)
+// LOAD CSV
 fetch('spklu_kalbar.csv')
 .then(res => res.text())
 .then(text => {
@@ -114,7 +152,6 @@ fetch('spklu_kalbar.csv')
   const kotaSet = new Set();
 
   rows.forEach(row => {
-    if(!row) return;
     const col = row.split(';');
 
     const d = {
@@ -159,13 +196,18 @@ fetch('spklu_kalbar.csv')
     opt.textContent = kota;
     filterKota.appendChild(opt);
   });
+
+  applyFilter();
 });
 
-// FILTER FUNCTION
+// FILTER + LIST
 function applyFilter(){
   const keyword = document.getElementById('searchNama').value.toLowerCase();
   const kota = document.getElementById('filterKota').value;
   const type = document.getElementById('filterType').value;
+  const list = document.getElementById('spkluList');
+
+  list.innerHTML = '';
 
   markers.forEach(m=>{
     const d = m.data;
@@ -176,13 +218,23 @@ function applyFilter(){
 
     if(matchNama && matchKota && matchType){
       map.addLayer(m);
+
+      const item = document.createElement('div');
+      item.className = 'list-item';
+      item.innerHTML = `<b>${d.nama}</b>${d.kw} kW – ${d.type}`;
+      item.onclick = ()=>{
+        map.setView([d.lat, d.lon], 13);
+        m.openPopup();
+      };
+      list.appendChild(item);
+
     } else {
       map.removeLayer(m);
     }
   });
 }
 
-// EVENT LISTENER
+// EVENT
 document.getElementById('searchNama').addEventListener('input', applyFilter);
 document.getElementById('filterKota').addEventListener('change', applyFilter);
 document.getElementById('filterType').addEventListener('change', applyFilter);
