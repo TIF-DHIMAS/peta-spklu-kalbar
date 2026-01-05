@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8">
+<title>Peta Sebaran SPKLU Kalimantan Barat</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/papaparse@5.3.2/papaparse.min.js"></script>
+
+<style>
+body { margin:0; font-family:Arial }
+#map { height:100vh; width:100vw }
+
+#sidebar {
+  position:absolute;
+  top:10px;
+  left:10px;
+  width:270px;
+  background:white;
+  padding:12px;
+  z-index:1000;
+  box-shadow:0 0 10px rgba(0,0,0,0.25);
+  border-radius:6px;
+}
+
+#sidebar h2 {
+  font-size:16px;
+  margin:0 0 10px 0;
+}
+
+#sidebar label {
+  font-size:13px;
+ affiliated;
+  margin-top:10px;
+  display:block;
+}
+
+#sidebar select {
+  width:100%;
+  padding:5px;
+  margin-top:4px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- SIDEBAR -->
+<div id="sidebar">
+  <h2>📍 Peta Sebaran SPKLU<br>Kalimantan Barat</h2>
+
+  <label>Kabupaten / Kota</label>
+  <select id="filterKota">
+    <option value="">Semua</option>
+  </select>
+
+  <label>Tipe Charging</label>
+  <select id="filterType">
+    <option value="">Semua</option>
+    <option value="ULTRA FAST CHARGING">Ultra Fast</option>
+    <option value="FAST CHARGING">Fast</option>
+    <option value="MEDIUM CHARGING">Medium</option>
+  </select>
+</div>
+
+<div id="map"></div>
+
+<script>
+/* ===================== BASE MAP ===================== */
+const map = L.map('map').setView([-0.5, 110.2], 7);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution:'&copy; OpenStreetMap'
+}).addTo(map);
+
+/* ===================== BATAS ADMIN KALBAR ===================== */
+/* Sumber: GADM Indonesia level provinsi */
+fetch("https://raw.githubusercontent.com/rezapace/geojson-indonesia/master/provinsi/kalimantan_barat.geojson")
+.then(res => res.json())
+.then(data => {
+  L.geoJSON(data, {
+    style:{
+      color:"#6a1b9a",
+      weight:2,
+      fill:false
+    }
+  }).addTo(map);
+});
+
+/* ===================== ICON BY TYPE ===================== */
+function iconByType(type){
+  let color = "blue";
+  if(type==="ULTRA FAST CHARGING") color="red";
+  else if(type==="FAST CHARGING") color="blue";
+  else if(type==="MEDIUM CHARGING") color="green";
+
+  return L.divIcon({
+    className:'',
+    html:`<div style="
+      background:${color};
+      width:14px;
+      height:14px;
+      border-radius:50%;
+      border:2px solid white;"></div>`,
+    iconSize:[14,14],
+    iconAnchor:[7,7]
+  });
+}
+
+/* ===================== LOAD CSV ===================== */
+let markers = [];
+
+Papa.parse("spklu_kalbar.csv",{
+  download:true,
+  header:true,
+  complete:function(results){
+
+    results.data.forEach(d=>{
+      if(!d.Latitude || !d.Longitude) return;
+
+      const m = L.marker(
+        [parseFloat(d.Latitude), parseFloat(d.Longitude)],
+        {icon:iconByType(d["TYPE CHARGE"])}
+      );
+
+      m.data = d;
+
+      m.bindPopup(`
+        <b>${d["Nama Stasiun"]}</b><br>
+        ${d.Alamat}<br><br>
+
+        📍 ${d.Kota}, ${d.Provinsi}<br>
+        ⚡ <b>${d["TYPE CHARGE"]}</b><br>
+        🔋 ${d.KW} kW<br><br>
+
+        <a href="https://www.google.com/maps/dir/?api=1&destination=${d.Latitude},${d.Longitude}"
+           target="_blank"
+           style="display:block;
+                  text-align:center;
+                  background:#1a73e8;
+                  color:white;
+                  padding:6px;
+                  border-radius:4px;
+                  text-decoration:none">
+          Petunjuk Arah
+        </a>
+      `);
+
+      m.addTo(map);
+      markers.push(m);
+
+      /* isi dropdown kota */
+      const kotaSel = document.getElementById("filterKota");
+      if(![...kotaSel.options].some(o=>o.value===d.Kota)){
+        kotaSel.innerHTML += `<option value="${d.Kota}">${d.Kota}</option>`;
+      }
+    });
+  }
+});
+
+/* ===================== FILTER FUNCTION ===================== */
+function applyFilter(){
+  const kota = filterKota.value;
+  const type = filterType.value;
+
+  markers.forEach(m=>{
+    const d = m.data;
+    const show =
+      (kota==="" || d.Kota===kota) &&
+      (type==="" || d["TYPE CHARGE"]===type);
+
+    show ? m.addTo(map) : map.removeLayer(m);
+  });
+}
+
+filterKota.onchange = applyFilter;
+filterType.onchange = applyFilter;
+</script>
+
+</body>
+</html>
